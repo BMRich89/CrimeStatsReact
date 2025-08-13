@@ -1,6 +1,6 @@
 "use client"
-import { useRef, useState } from "react";
-import { postcodeValidator, postcodeValidatorExistsForCountry } from 'postcode-validator';
+import { useState } from "react";
+import { postcodeValidator } from 'postcode-validator';
 import { Button } from "./Button";
 
 type PostcodeInputProps = {
@@ -18,7 +18,6 @@ export function PostcodeInput({buttonText}: PostcodeInputProps) {
     const showValidationError = !isPostcodeValid && postcode !== "";
     const disableButton = !isPostcodeValid || postcode === "";
 
-
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -30,6 +29,28 @@ export function PostcodeInput({buttonText}: PostcodeInputProps) {
 
     }
     console.log("Input value:", formData.get("postcode"));
+    const postcodeValue = formData.get("postcode") as string;
+    const cleanedPostcode = postcodeValue.replace(/\s+/g, '')
+    fetch(`/api/crime?postcode=${cleanedPostcode}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log("Data received:", data);
+      // Handle the data as needed, e.g., update state or display results
+    })
+    .catch(error => { 
+      console.error("Error fetching data:", error);
+      // Handle the error, e.g., show an error message to the user
+    });    
   };
   
   const setIsPostcodeValidState = (postcode: string) => {
