@@ -1,64 +1,83 @@
 "use client"
-import { useRef, useState } from "react";
-import { postcodeValidator, postcodeValidatorExistsForCountry } from 'postcode-validator';
+import { useState } from "react";
+import { postcodeValidator } from 'postcode-validator';
 import { Button } from "./Button";
+import { Crime } from "../types/crime";
 
 type PostcodeInputProps = {
   buttonText?: string;
   placeholder?: string;
+  onCrimesLoaded?: (crimes: Crime[]) => void;
 }
 
-export function PostcodeInput({buttonText}: PostcodeInputProps) {
+export function PostcodeInput({ buttonText, onCrimesLoaded }: PostcodeInputProps) {
 
-    const [isPostcodeValid,setIsPostcodeValid] = useState(true);
-    const [postcode,setPostCode] = useState("");
+    const [isPostcodeValid, setIsPostcodeValid] = useState(true);
+    const [postcode, setPostCode] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const computedButtonText = buttonText || "Submit";
-    const country = "GB"; // Default to UK, can be parameterized later
+    const country = "GB"; // Default to UK
 
     const showValidationError = !isPostcodeValid && postcode !== "";
-    const disableButton = !isPostcodeValid || postcode === "";
+    const disableButton = !isPostcodeValid || postcode === "" || isLoading;
 
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    const form = e.currentTarget;
-    const formData = new FormData(form);
-    if(formData.get("postcode") === null || formData.get("postcode") === "") {
-      console.error("Postcode input is empty");
-      return;
+    if (!postcode) return;
 
+    setIsLoading(true);
+    setError(null);
+    onCrimesLoaded?.([]);
+
+    try {
+      const res = await fetch(`/api/crime?postcode=${encodeURIComponent(postcode)}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `Request failed: ${res.statusText}`);
+      }
+      const data: Crime[] = await res.json();
+      onCrimesLoaded?.(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
+    } finally {
+      setIsLoading(false);
     }
-    console.log("Input value:", formData.get("postcode"));
   };
   
-  const setIsPostcodeValidState = (postcode: string) => {
-    if(postcode === "") {
+  const setIsPostcodeValidState = (value: string) => {
+    if (value === "") {
       setIsPostcodeValid(true);
-    } else{
-      setIsPostcodeValid(postcodeValidator(postcode, country));
-      console.log("Postcode validation result:", postcodeValidator(postcode, country));
+    } else {
+      setIsPostcodeValid(postcodeValidator(value, country));
     }
   };
 
   return (
-     <form method="post" onSubmit={handleSubmit}>
-
-    <div className="flex flex-row items-center justify-center h-full">
+    <form onSubmit={handleSubmit}>
+      <div className="flex flex-row items-center justify-center h-full">
         <span className="bg-white-50">
-            <input className="border bg-blue-50 placeholder:text-gray-500 m-5 text-black p-2" type="text" placeholder="Enter postcode" maxLength={11} name="postcode" onChange={(e) => {
-                      console.log(e.target.value);
-                      setPostCode(e.target.value);
-                      setIsPostcodeValidState(e.target.value);
-                      
-                  }} />
+          <input
+            className="border bg-blue-50 placeholder:text-gray-500 m-5 text-black p-2"
+            type="text"
+            placeholder="Enter postcode"
+            maxLength={11}
+            name="postcode"
+            value={postcode}
+            onChange={(e) => {
+              setPostCode(e.target.value);
+              setIsPostcodeValidState(e.target.value);
+            }}
+          />
         </span>
-        <Button buttonText={computedButtonText} disabledState={disableButton}/>
-    </div>
-    <div className="flex flex-col items-center justify-center">
-            { showValidationError && <p className="text-red-500">Postcode is invalid</p>}
-    </div>
-     </form>
+        <Button buttonText={isLoading ? "Searching…" : computedButtonText} disabledState={disableButton} />
+      </div>
+      <div className="flex flex-col items-center justify-center">
+        {showValidationError && <p className="text-red-500">Postcode is invalid</p>}
+        {error && <p className="text-red-500">{error}</p>}
+      </div>
+    </form>
   );
 }
 

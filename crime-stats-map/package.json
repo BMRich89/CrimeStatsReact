@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
     "next": "15.4.6",
     "postcode-validator": "^3.10.5",
     "react": "19.1.0",
