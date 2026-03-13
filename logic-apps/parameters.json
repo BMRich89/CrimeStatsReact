@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "storageAccountName": {
+      "value": "@appsetting('storageAccountName')"
+    },
+    "storageAccountKey": {
+      "value": "@appsetting('storageAccountKey')"
+    },
+    "mappingFilesContainer": {
+      "value": "@appsetting('mappingFilesContainer')"
+    },
+    "mappingPath": {
+      "value": "@appsetting('mappingPath')"
+    },
+    "acquiredFilesContainer": {
+      "value": "@appsetting('acquiredFilesContainer')"
+    },
+    "acquiredFilesPath": {
+      "value": "@appsetting('acquiredFilesPath')"
+    },
+    "scidFilesContainer": {
+      "value": "@appsetting('scidFilesContainer')"
+    },
+    "scidFilesPath": {
+      "value": "@appsetting('scidFilesPath')"
+    },
+    "mergedFilesPath": {
+      "value": "@appsetting('mergedFilesPath')"
+    },
+    "supportEmail": {
+      "value": "@appsetting('supportEmail')"
+    },
+    "zipMergeFunctionUrl": {
+      "value": "@appsetting('zipMergeFunctionUrl')"
+    },
+    "zipMergeFunctionKey": {
+      "value": "@appsetting('zipMergeFunctionKey')"
+    }
+  }
+}

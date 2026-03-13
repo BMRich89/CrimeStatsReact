@@ -1,0 +1,16 @@
+{
+  "name": "merge-zips-function",
+  "version": "1.0.0",
+  "description": "Azure Function to merge two ZIP files into a single ZIP archive.",
+  "scripts": {
+    "start": "func start",
+    "test": "jest"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@azure/functions": "^4.0.0",
+    "jest": "^29.0.0"
+  }
+}

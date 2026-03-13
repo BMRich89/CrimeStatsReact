@@ -1,0 +1,686 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "When_HTTP_Request_Received": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "mappingFileName": {
+                "type": "string",
+                "description": "Name of the CSV mapping file (e.g. counter-update-2024-01.csv)"
+              },
+              "emailAddress": {
+                "type": "string",
+                "description": "Recipient email address for the completion notification"
+              }
+            },
+            "required": ["mappingFileName", "emailAddress"]
+          },
+          "method": "POST"
+        }
+      }
+    },
+    "actions": {
+      "Initialize_Processing_Results": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "processingResults",
+              "type": "array",
+              "value": []
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "Initialize_Error_Log": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "errorLog",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_Processing_Results": ["Succeeded"]
+        }
+      },
+      "Initialize_Success_Count": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "successCount",
+              "type": "integer",
+              "value": 0
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_Error_Log": ["Succeeded"]
+        }
+      },
+      "Initialize_Failure_Count": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "failureCount",
+              "type": "integer",
+              "value": 0
+            }
+          ]
+        },
+        "runAfter": {
+          "Initialize_Success_Count": ["Succeeded"]
+        }
+      },
+      "Main_Processing_Scope": {
+        "type": "Scope",
+        "actions": {
+          "Validate_File_Name_Format": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "startsWith": [
+                    "@triggerBody()?['mappingFileName']",
+                    "counter-update-"
+                  ]
+                },
+                {
+                  "endsWith": [
+                    "@triggerBody()?['mappingFileName']",
+                    ".csv"
+                  ]
+                }
+              ]
+            },
+            "actions": {},
+            "else": {
+              "actions": {
+                "Response_Invalid_Filename": {
+                  "type": "Response",
+                  "inputs": {
+                    "statusCode": 400,
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "error": "Invalid mapping file name.",
+                      "detail": "File name must start with 'counter-update-' and end with '.csv'.",
+                      "received": "@triggerBody()?['mappingFileName']"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Terminate_Invalid_Filename": {
+                  "type": "Terminate",
+                  "inputs": {
+                    "runStatus": "Cancelled",
+                    "runError": {
+                      "code": "INVALID_FILENAME",
+                      "message": "Mapping file name validation failed."
+                    }
+                  },
+                  "runAfter": {
+                    "Response_Invalid_Filename": ["Succeeded"]
+                  }
+                }
+              }
+            },
+            "runAfter": {}
+          },
+          "Get_Mapping_File": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "referenceName": "azureblob"
+                }
+              },
+              "method": "get",
+              "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(appsetting('storageAccountName')))}/files/@{encodeURIComponent(encodeURIComponent(concat('/', appsetting('mappingFilesContainer'), '/', appsetting('mappingPath'), '/', triggerBody()?['mappingFileName'])))}/content",
+              "queries": {
+                "inferContentType": false
+              }
+            },
+            "runAfter": {
+              "Validate_File_Name_Format": ["Succeeded"]
+            },
+            "retryPolicy": {
+              "type": "exponential",
+              "count": 3,
+              "interval": "PT5S",
+              "minimumInterval": "PT5S",
+              "maximumInterval": "PT1M"
+            }
+          },
+          "Check_File_Retrieved": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "not": {
+                    "equals": [
+                      "@body('Get_Mapping_File')",
+                      null
+                    ]
+                  }
+                }
+              ]
+            },
+            "actions": {},
+            "else": {
+              "actions": {
+                "Response_File_Not_Found": {
+                  "type": "Response",
+                  "inputs": {
+                    "statusCode": 400,
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "error": "Mapping file not found or could not be read.",
+                      "detail": "Ensure the file exists at the configured mappingPath and is accessible.",
+                      "fileName": "@triggerBody()?['mappingFileName']"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Terminate_File_Not_Found": {
+                  "type": "Terminate",
+                  "inputs": {
+                    "runStatus": "Cancelled",
+                    "runError": {
+                      "code": "FILE_NOT_FOUND",
+                      "message": "Mapping file not found in blob storage."
+                    }
+                  },
+                  "runAfter": {
+                    "Response_File_Not_Found": ["Succeeded"]
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Get_Mapping_File": ["Succeeded"]
+            }
+          },
+          "Parse_CSV_Content": {
+            "type": "JavaScriptCode",
+            "inputs": {
+              "code": "// Parse CSV mapping file and validate structure\nvar content = workflowContext.actions.Get_Mapping_File.outputs.body;\n\n// Handle base64-encoded content from blob storage connector\nif (content && typeof content === 'object' && content.$content) {\n    content = Buffer.from(content.$content, 'base64').toString('utf8');\n} else if (Buffer.isBuffer(content)) {\n    content = content.toString('utf8');\n} else if (typeof content !== 'string') {\n    content = String(content);\n}\n\n// Remove UTF-8 BOM if present\ncontent = content.replace(/^\\uFEFF/, '');\n\n// Normalise line endings\nvar lines = content.split(/\\r?\\n/).filter(function(line) {\n    return line.trim() !== '';\n});\n\nif (lines.length === 0) {\n    return { success: false, error: 'CSV file is empty', headers: [], rows: [], rowCount: 0 };\n}\n\n// Parse headers (support quoted fields)\nfunction parseCsvLine(line) {\n    var result = [];\n    var current = '';\n    var inQuotes = false;\n    for (var i = 0; i < line.length; i++) {\n        var ch = line[i];\n        if (ch === '\"') {\n            inQuotes = !inQuotes;\n        } else if (ch === ',' && !inQuotes) {\n            result.push(current.trim());\n            current = '';\n        } else {\n            current += ch;\n        }\n    }\n    result.push(current.trim());\n    return result;\n}\n\nvar headers = parseCsvLine(lines[0]);\nvar rows = [];\n\nfor (var i = 1; i < lines.length; i++) {\n    var values = parseCsvLine(lines[i]);\n    if (values.length >= headers.length) {\n        var row = {};\n        for (var j = 0; j < headers.length; j++) {\n            row[headers[j]] = values[j] || '';\n        }\n        rows.push(row);\n    }\n}\n\nreturn {\n    success: true,\n    headers: headers,\n    rows: rows,\n    rowCount: rows.length\n};"
+            },
+            "runAfter": {
+              "Check_File_Retrieved": ["Succeeded"]
+            }
+          },
+          "Validate_CSV_Headers": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "equals": [
+                    "@body('Parse_CSV_Content')?['success']",
+                    true
+                  ]
+                },
+                {
+                  "contains": [
+                    "@body('Parse_CSV_Content')?['headers']",
+                    "acquiredid"
+                  ]
+                },
+                {
+                  "contains": [
+                    "@body('Parse_CSV_Content')?['headers']",
+                    "SCID"
+                  ]
+                },
+                {
+                  "equals": [
+                    "@length(body('Parse_CSV_Content')?['headers'])",
+                    2
+                  ]
+                }
+              ]
+            },
+            "actions": {},
+            "else": {
+              "actions": {
+                "Response_Invalid_Headers": {
+                  "type": "Response",
+                  "inputs": {
+                    "statusCode": 400,
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "error": "Invalid CSV structure.",
+                      "detail": "The CSV file must contain exactly two columns: 'acquiredid' and 'SCID'.",
+                      "foundHeaders": "@body('Parse_CSV_Content')?['headers']",
+                      "parseError": "@body('Parse_CSV_Content')?['error']"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Terminate_Invalid_Headers": {
+                  "type": "Terminate",
+                  "inputs": {
+                    "runStatus": "Cancelled",
+                    "runError": {
+                      "code": "INVALID_CSV_HEADERS",
+                      "message": "CSV header validation failed."
+                    }
+                  },
+                  "runAfter": {
+                    "Response_Invalid_Headers": ["Succeeded"]
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Parse_CSV_Content": ["Succeeded"]
+            }
+          },
+          "Check_Rows_Not_Empty": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "greater": [
+                    "@body('Parse_CSV_Content')?['rowCount']",
+                    0
+                  ]
+                }
+              ]
+            },
+            "actions": {},
+            "else": {
+              "actions": {
+                "Response_Empty_CSV": {
+                  "type": "Response",
+                  "inputs": {
+                    "statusCode": 400,
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "error": "CSV file contains no data rows.",
+                      "detail": "The mapping file has valid headers but zero data rows. Nothing to process."
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Terminate_Empty_CSV": {
+                  "type": "Terminate",
+                  "inputs": {
+                    "runStatus": "Cancelled",
+                    "runError": {
+                      "code": "EMPTY_CSV",
+                      "message": "CSV file contains no data rows to process."
+                    }
+                  },
+                  "runAfter": {
+                    "Response_Empty_CSV": ["Succeeded"]
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Validate_CSV_Headers": ["Succeeded"]
+            }
+          },
+          "For_Each_Row": {
+            "type": "Foreach",
+            "foreach": "@body('Parse_CSV_Content')?['rows']",
+            "operationOptions": "Sequential",
+            "actions": {
+              "Row_Try_Scope": {
+                "type": "Scope",
+                "actions": {
+                  "Compose_Sanitized_SCID": {
+                    "type": "Compose",
+                    "inputs": "@replace(items('For_Each_Row')?['SCID'], ':', '_')",
+                    "runAfter": {}
+                  },
+                  "Compose_Acquired_Blob_Path": {
+                    "type": "Compose",
+                    "inputs": "@concat('/', appsetting('acquiredFilesContainer'), '/', appsetting('acquiredFilesPath'), '/', items('For_Each_Row')?['acquiredid'], '.zip')",
+                    "runAfter": {
+                      "Compose_Sanitized_SCID": ["Succeeded"]
+                    }
+                  },
+                  "Compose_SCID_Blob_Path": {
+                    "type": "Compose",
+                    "inputs": "@concat('/', appsetting('scidFilesContainer'), '/', appsetting('scidFilesPath'), '/', outputs('Compose_Sanitized_SCID'), '.zip')",
+                    "runAfter": {
+                      "Compose_Sanitized_SCID": ["Succeeded"]
+                    }
+                  },
+                  "Get_Acquired_ZIP": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "referenceName": "azureblob"
+                        }
+                      },
+                      "method": "get",
+                      "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(appsetting('storageAccountName')))}/files/@{encodeURIComponent(encodeURIComponent(outputs('Compose_Acquired_Blob_Path')))}/content",
+                      "queries": {
+                        "inferContentType": false
+                      }
+                    },
+                    "runAfter": {
+                      "Compose_Acquired_Blob_Path": ["Succeeded"]
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S",
+                      "minimumInterval": "PT10S",
+                      "maximumInterval": "PT2M"
+                    }
+                  },
+                  "Get_SCID_ZIP": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "referenceName": "azureblob"
+                        }
+                      },
+                      "method": "get",
+                      "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(appsetting('storageAccountName')))}/files/@{encodeURIComponent(encodeURIComponent(outputs('Compose_SCID_Blob_Path')))}/content",
+                      "queries": {
+                        "inferContentType": false
+                      }
+                    },
+                    "runAfter": {
+                      "Compose_SCID_Blob_Path": ["Succeeded"]
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S",
+                      "minimumInterval": "PT10S",
+                      "maximumInterval": "PT2M"
+                    }
+                  },
+                  "Merge_ZIPs": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@appsetting('zipMergeFunctionUrl')",
+                      "headers": {
+                        "Content-Type": "application/json",
+                        "x-functions-key": "@appsetting('zipMergeFunctionKey')"
+                      },
+                      "body": {
+                        "acquiredZipBase64": "@{body('Get_Acquired_ZIP')?['$content']}",
+                        "scidZipBase64": "@{body('Get_SCID_ZIP')?['$content']}",
+                        "outputFileName": "@{concat(outputs('Compose_Sanitized_SCID'), '.zip')}"
+                      }
+                    },
+                    "runAfter": {
+                      "Get_Acquired_ZIP": ["Succeeded"],
+                      "Get_SCID_ZIP": ["Succeeded"]
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S",
+                      "minimumInterval": "PT10S",
+                      "maximumInterval": "PT2M"
+                    }
+                  },
+                  "Upload_Merged_ZIP": {
+                    "type": "ApiConnection",
+                    "inputs": {
+                      "host": {
+                        "connection": {
+                          "referenceName": "azureblob"
+                        }
+                      },
+                      "method": "post",
+                      "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent(appsetting('storageAccountName')))}/files",
+                      "queries": {
+                        "folderPath": "@{concat('/', appsetting('scidFilesContainer'), '/', appsetting('mergedFilesPath'))}",
+                        "name": "@{concat(outputs('Compose_Sanitized_SCID'), '.zip')}",
+                        "queryParametersSingleEncoded": true
+                      },
+                      "body": "@body('Merge_ZIPs')"
+                    },
+                    "runAfter": {
+                      "Merge_ZIPs": ["Succeeded"]
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S",
+                      "minimumInterval": "PT10S",
+                      "maximumInterval": "PT2M"
+                    }
+                  },
+                  "Append_Row_Success": {
+                    "type": "AppendToArrayVariable",
+                    "inputs": {
+                      "name": "processingResults",
+                      "value": {
+                        "acquiredid": "@items('For_Each_Row')?['acquiredid']",
+                        "SCID": "@items('For_Each_Row')?['SCID']",
+                        "status": "Success",
+                        "outputFile": "@{concat(outputs('Compose_Sanitized_SCID'), '.zip')}",
+                        "reason": null
+                      }
+                    },
+                    "runAfter": {
+                      "Upload_Merged_ZIP": ["Succeeded"]
+                    }
+                  },
+                  "Increment_Success_Count": {
+                    "type": "IncrementVariable",
+                    "inputs": {
+                      "name": "successCount",
+                      "value": 1
+                    },
+                    "runAfter": {
+                      "Append_Row_Success": ["Succeeded"]
+                    }
+                  }
+                },
+                "runAfter": {}
+              },
+              "Row_Catch_Scope": {
+                "type": "Scope",
+                "actions": {
+                  "Compose_Row_Error_Details": {
+                    "type": "Compose",
+                    "inputs": {
+                      "acquiredid": "@items('For_Each_Row')?['acquiredid']",
+                      "SCID": "@items('For_Each_Row')?['SCID']",
+                      "failedAction": "@{result('Row_Try_Scope')?[0]?['name']}",
+                      "errorCode": "@{result('Row_Try_Scope')?[0]?['error']?['code']}",
+                      "errorMessage": "@{result('Row_Try_Scope')?[0]?['error']?['message']}"
+                    },
+                    "runAfter": {}
+                  },
+                  "Append_Row_Failure": {
+                    "type": "AppendToArrayVariable",
+                    "inputs": {
+                      "name": "processingResults",
+                      "value": {
+                        "acquiredid": "@items('For_Each_Row')?['acquiredid']",
+                        "SCID": "@items('For_Each_Row')?['SCID']",
+                        "status": "Failed",
+                        "outputFile": null,
+                        "reason": "@{concat('Action: ', outputs('Compose_Row_Error_Details')?['failedAction'], ' | Error: ', outputs('Compose_Row_Error_Details')?['errorMessage'])}"
+                      }
+                    },
+                    "runAfter": {
+                      "Compose_Row_Error_Details": ["Succeeded"]
+                    }
+                  },
+                  "Increment_Failure_Count": {
+                    "type": "IncrementVariable",
+                    "inputs": {
+                      "name": "failureCount",
+                      "value": 1
+                    },
+                    "runAfter": {
+                      "Append_Row_Failure": ["Succeeded"]
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Row_Try_Scope": ["Failed", "TimedOut", "Skipped"]
+                }
+              }
+            },
+            "runAfter": {
+              "Check_Rows_Not_Empty": ["Succeeded"]
+            }
+          },
+          "Compose_Success_Email_Body": {
+            "type": "Compose",
+            "inputs": "@{concat('<html><body><h2>ZIP Merge Process Complete</h2><p>Processing of mapping file <strong>', triggerBody()?['mappingFileName'], '</strong> has finished.</p><h3>Summary</h3><table border=\"1\" cellpadding=\"5\" cellspacing=\"0\"><tr><th>Total Rows</th><th>Succeeded</th><th>Failed</th></tr><tr><td>', body('Parse_CSV_Content')?['rowCount'], '</td><td>', variables('successCount'), '</td><td>', variables('failureCount'), '</td></tr></table><h3>Row Details</h3><table border=\"1\" cellpadding=\"5\" cellspacing=\"0\"><tr><th>acquiredid</th><th>SCID</th><th>Status</th><th>Output File</th><th>Reason</th></tr>', join(body('Build_Results_Table_Rows')?['tableRows'], ''), '</table></body></html>')}",
+            "runAfter": {
+              "Build_Results_Table_Rows": ["Succeeded"]
+            }
+          },
+          "Build_Results_Table_Rows": {
+            "type": "JavaScriptCode",
+            "inputs": {
+              "code": "var results = workflowContext.variables.processingResults;\nvar rows = results.map(function(r) {\n    var statusColor = r.status === 'Success' ? '#d4edda' : '#f8d7da';\n    return '<tr style=\"background-color:' + statusColor + '\"><td>' + (r.acquiredid || '') + '</td><td>' + (r.SCID || '') + '</td><td>' + (r.status || '') + '</td><td>' + (r.outputFile || '-') + '</td><td>' + (r.reason || '-') + '</td></tr>';\n});\nreturn { tableRows: rows };"
+            },
+            "runAfter": {
+              "For_Each_Row": ["Succeeded", "Failed"]
+            }
+          },
+          "Send_Completion_Email": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "referenceName": "office365"
+                }
+              },
+              "method": "post",
+              "path": "/v2/Mail",
+              "body": {
+                "To": "@triggerBody()?['emailAddress']",
+                "Subject": "@{concat('ZIP Merge Complete – ', triggerBody()?['mappingFileName'], ' [', variables('successCount'), ' succeeded / ', variables('failureCount'), ' failed]')}",
+                "Body": "@{outputs('Compose_Success_Email_Body')}",
+                "IsHtml": true,
+                "Importance": "Normal"
+              }
+            },
+            "runAfter": {
+              "Compose_Success_Email_Body": ["Succeeded"]
+            }
+          },
+          "Return_Success_Response": {
+            "type": "Response",
+            "inputs": {
+              "statusCode": 200,
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "status": "Completed",
+                "mappingFileName": "@triggerBody()?['mappingFileName']",
+                "totalRows": "@body('Parse_CSV_Content')?['rowCount']",
+                "succeeded": "@variables('successCount')",
+                "failed": "@variables('failureCount')",
+                "notificationSentTo": "@triggerBody()?['emailAddress']",
+                "results": "@variables('processingResults')"
+              }
+            },
+            "runAfter": {
+              "Send_Completion_Email": ["Succeeded"]
+            }
+          }
+        },
+        "runAfter": {
+          "Initialize_Failure_Count": ["Succeeded"]
+        }
+      },
+      "Catch_Workflow_Failure": {
+        "type": "Scope",
+        "actions": {
+          "Compose_Workflow_Error_Details": {
+            "type": "Compose",
+            "inputs": {
+              "mappingFileName": "@triggerBody()?['mappingFileName']",
+              "emailAddress": "@triggerBody()?['emailAddress']",
+              "workflowRunId": "@{workflow()?['run']?['name']}",
+              "workflowName": "@{workflow()?['name']}",
+              "failedAt": "@{utcNow()}",
+              "errorMessage": "@{result('Main_Processing_Scope')?[0]?['error']?['message']}",
+              "errorCode": "@{result('Main_Processing_Scope')?[0]?['error']?['code']}",
+              "partialResults": "@variables('processingResults')",
+              "successCount": "@variables('successCount')",
+              "failureCount": "@variables('failureCount')"
+            },
+            "runAfter": {}
+          },
+          "Send_Support_Error_Email": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "referenceName": "office365"
+                }
+              },
+              "method": "post",
+              "path": "/v2/Mail",
+              "body": {
+                "To": "@appsetting('supportEmail')",
+                "Subject": "@{concat('[ACTION REQUIRED] ZIP Merge Workflow Failed – ', triggerBody()?['mappingFileName'])}",
+                "Body": "@{concat('<html><body><h2 style=\"color:red;\">ZIP Merge Workflow Error</h2><p>The ZIP merge workflow encountered an unhandled exception and could not complete.</p><h3>Details</h3><table border=\"1\" cellpadding=\"5\" cellspacing=\"0\"><tr><th>Field</th><th>Value</th></tr><tr><td>Mapping File</td><td>', triggerBody()?['mappingFileName'], '</td></tr><tr><td>Requested By</td><td>', triggerBody()?['emailAddress'], '</td></tr><tr><td>Run ID</td><td>', workflow()?['run']?['name'], '</td></tr><tr><td>Failed At</td><td>', utcNow(), '</td></tr><tr><td>Error</td><td>', outputs('Compose_Workflow_Error_Details')?['errorMessage'], '</td></tr><tr><td>Error Code</td><td>', outputs('Compose_Workflow_Error_Details')?['errorCode'], '</td></tr><tr><td>Rows Succeeded Before Failure</td><td>', variables('successCount'), '</td></tr><tr><td>Rows Failed Before Failure</td><td>', variables('failureCount'), '</td></tr></table><h3>Partial Results</h3><pre>', string(variables('processingResults')), '</pre><p>Please investigate the Logic App run in the Azure portal using the Run ID above.</p></body></html>')}",
+                "IsHtml": true,
+                "Importance": "High"
+              }
+            },
+            "runAfter": {
+              "Compose_Workflow_Error_Details": ["Succeeded"]
+            }
+          },
+          "Return_Internal_Error_Response": {
+            "type": "Response",
+            "inputs": {
+              "statusCode": 500,
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "error": "An unexpected error occurred during workflow execution.",
+                "workflowRunId": "@{workflow()?['run']?['name']}",
+                "detail": "The support team has been notified. Please reference the workflowRunId when raising a support ticket."
+              }
+            },
+            "runAfter": {
+              "Send_Support_Error_Email": ["Succeeded", "Failed"]
+            }
+          }
+        },
+        "runAfter": {
+          "Main_Processing_Scope": ["Failed", "TimedOut"]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful"
+}
