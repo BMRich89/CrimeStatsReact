@@ -38,9 +38,11 @@ function categoryColour(category: string): string {
 }
 
 function buildPinUrl(colour: string): string {
-  // Google Maps Chart API coloured pin — falls back gracefully if blocked
-  const hex = colour.replace("#", "");
-  return `https://chart.googleapis.com/chart?chst=d_map_pin_letter&chld=%E2%80%A2|${hex}|ffffff`;
+  // Use a data URL for a simple colored circle instead of Chart API
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="21" height="34" viewBox="0 0 21 34">
+    <path fill="${colour}" d="M10.5 0C4.7 0 0 4.7 0 10.5 0 18.2 10.5 34 10.5 34s10.5-15.8 10.5-23.5C21 4.7 16.3 0 10.5 0z"/>
+  </svg>`;
+  return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
 
 export function CrimeMap({ crimes }: CrimeMapProps) {
@@ -101,24 +103,31 @@ export function CrimeMap({ crimes }: CrimeMapProps) {
 
         {/* Crime markers */}
         {crimes.map((crime, index) => {
-          if (!crime.location?.latitude || !crime.location?.longitude) return null;
-          const position = {
-            lat: parseFloat(crime.location.latitude),
-            lng: parseFloat(crime.location.longitude),
-          };
-          const colour = categoryColour(crime.category);
-          return (
-            <Marker
-              key={crime.persistent_id || index}
-              position={position}
-              icon={{
-                url: buildPinUrl(colour),
-                scaledSize: new window.google.maps.Size(MARKER_WIDTH, MARKER_HEIGHT),
-              }}
-              onClick={() => setSelectedCrime(crime)}
-            />
-          );
-        })}
+  console.log("Crime:", crime); // Log the crime data
+  if (!crime.location?.latitude || !crime.location?.longitude) {
+    console.log("Skipping crime - missing location");
+    return null;
+  }
+  const position = {
+    lat: parseFloat(crime.location.latitude),
+    lng: parseFloat(crime.location.longitude),
+  };
+  const colour = categoryColour(crime.category);
+  console.log("Rendering marker at:", position, "with colour:", colour);
+  return (
+    <Marker
+      key={crime.persistent_id || index}
+      position={position}
+      icon={{
+        url: buildPinUrl(colour),
+        origin: new window.google.maps.Point(0, 0),
+        anchor: new window.google.maps.Point(MARKER_WIDTH / 2, MARKER_HEIGHT),
+        scaledSize: new window.google.maps.Size(MARKER_WIDTH, MARKER_HEIGHT),
+      }}
+      onClick={() => setSelectedCrime(crime)}
+    />
+  );
+})}
 
         {/* Info window for selected crime */}
         {selectedCrime && selectedCrime.location?.latitude && (
