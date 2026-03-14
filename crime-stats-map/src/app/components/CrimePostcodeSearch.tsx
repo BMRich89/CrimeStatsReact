@@ -1,22 +1,12 @@
 "use client"
 import { useState } from "react";
-import { postcodeValidator } from 'postcode-validator';
-import { Button } from "./Button";
+import { Map } from "./Map";
 import { PostcodeInput } from "./PostcodeInput";
 
-type CrimePostcodeSearchProps = {
-  buttonText?: string;
-  placeholder?: string;
-}
+export function CrimePostcodeSearch() {
 
-export function CrimePostcodeSearch({buttonText}: CrimePostcodeSearchProps) {
-
-    const [isPostcodeValid,setIsPostcodeValid] = useState(true);
-    const [postcode,setPostCode] = useState("");
-    const computedButtonText = buttonText || "Submit";
-
-    const showValidationError = !isPostcodeValid && postcode !== "";
-    const disableButton = !isPostcodeValid || postcode === "";
+  const [postcode,setPostCode] = useState("");
+  const [center,setCenter] = useState({ lat: -3.745, lng: -31 });
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -55,10 +45,12 @@ export function CrimePostcodeSearch({buttonText}: CrimePostcodeSearchProps) {
   
 
 
-  return (
+  return (<>
      <form method="post" onSubmit={handleSubmit}>
         <PostcodeInput Postcode={postcode} SetPostcode={(p:string) => setPostCode(p)}/>
      </form>
+     <Map Center={center}/>
+  </>
   );
 }
 

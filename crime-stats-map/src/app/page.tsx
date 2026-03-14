@@ -1,13 +1,13 @@
 
 import { PageContainer } from "./components/PageContainer";
 import { TitleBar } from "./components/Titlebar";
-import { PostcodeInput } from "./components/PostcodeInput";
+import { CrimePostcodeSearch } from "./components/CrimePostcodeSearch";
 
 export default function Home() {
   return (
     <PageContainer>
       <TitleBar title="Crime Stats Map"/>
-      <PostcodeInput />
+      <CrimePostcodeSearch />
     </PageContainer>
 );
 }
