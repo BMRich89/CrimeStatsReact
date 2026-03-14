@@ -1,20 +1,89 @@
+"use client"
 import React from 'react';
-import { Marker } from 'google-maps-react';
+import { GoogleMap, useJsApiLoader, Marker, Circle } from '@react-google-maps/api';
 
-const icon = {
-  url: 'path/to/icon.png', // URL for the marker icon
-  origin: new google.maps.Point(0, 0), // Origin of the image
-  anchor: new google.maps.Point(15, 50), // Anchor point of the image
-  scaledSize: new google.maps.Size(30, 30) // Size to scale the image to
+export type Crime = {
+  id?: string;
+  category?: string;
+  month?: string;
+  location?: {
+    latitude: string;
+    longitude: string;
+    street?: {
+      name?: string;
+    };
+  };
 };
 
-const CrimeMap = () => {
-  return (
-    <Marker
-      position={{ lat: 37.567, lng: -122.321 }}
-      icon={icon}
-    />
+type CrimeMapProps = {
+  crimes: Crime[];
+  searchRadiusMetres?: number;
+  searchCentreLat?: number;
+  searchCentreLng?: number;
+};
+
+const DEFAULT_RADIUS_METRES = 1609; // 1 mile
+
+const containerStyle = {
+  width: '40vw',
+  height: '40vw',
+  margin: 'auto 10vw',
+};
+
+const circleOptions = {
+  fillColor: '#4285F4',
+  fillOpacity: 0.1,
+  strokeColor: '#4285F4',
+  strokeOpacity: 0.8,
+  strokeWeight: 2,
+};
+
+export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCentreLng }: CrimeMapProps) {
+  const { isLoaded } = useJsApiLoader({
+    id: 'google-map-script',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+  });
+
+  const centre = React.useMemo(() => {
+    if (searchCentreLat !== undefined && searchCentreLng !== undefined) {
+      return { lat: searchCentreLat, lng: searchCentreLng };
+    }
+    const first = crimes.find(
+      (c) => c.location?.latitude && c.location?.longitude
+    );
+    if (!first) return { lat: 51.5074, lng: -0.1278 }; // fallback: central London
+    return {
+      lat: parseFloat(first.location!.latitude),
+      lng: parseFloat(first.location!.longitude),
+    };
+  }, [crimes, searchCentreLat, searchCentreLng]);
+
+  const radiusMetres = searchRadiusMetres ?? DEFAULT_RADIUS_METRES;
+
+  return isLoaded ? (
+    <GoogleMap
+      mapContainerStyle={containerStyle}
+      center={centre}
+      zoom={13}
+    >
+      <Circle center={centre} radius={radiusMetres} options={circleOptions} />
+      {crimes.map((crime, index) => {
+        if (!crime.location?.latitude || !crime.location?.longitude) return null;
+        return (
+          <Marker
+            key={crime.id ?? index}
+            position={{
+              lat: parseFloat(crime.location.latitude),
+              lng: parseFloat(crime.location.longitude),
+            }}
+            title={crime.category}
+          />
+        );
+      })}
+    </GoogleMap>
+  ) : (
+    <></>
   );
-};
+}
 
 export default CrimeMap;
