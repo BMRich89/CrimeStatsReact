@@ -14,6 +14,7 @@ export function CrimePostcodeSearch() {
 
   const [postcode, setPostCode] = useState("");
   const [crimeData, setCrimeData] = useState<CrimeSearchResponse>({ crimes: [] });
+  const [hasSearched, setHasSearched] = useState(false);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -39,6 +40,7 @@ export function CrimePostcodeSearch() {
     })
     .then((data: CrimeSearchResponse) => {
       setCrimeData(data);
+      setHasSearched(true);
     })
     .catch(() => {
       // Handle the error, e.g., show an error message to the user
@@ -49,13 +51,14 @@ export function CrimePostcodeSearch() {
     <form method="post" onSubmit={handleSubmit}>
       <PostcodeInput Postcode={postcode} SetPostcode={(p: string) => setPostCode(p)} />
     </form>
-    <CrimeMap
-      crimes={crimeData.crimes}
-      searchRadiusMetres={crimeData.searchRadiusMetres}
-      searchCentreLat={crimeData.searchCentreLat}
-      searchCentreLng={crimeData.searchCentreLng}
-    />
+    {hasSearched && (
+      <CrimeMap
+        crimes={crimeData.crimes}
+        searchRadiusMetres={crimeData.searchRadiusMetres}
+        searchCentreLat={crimeData.searchCentreLat}
+        searchCentreLng={crimeData.searchCentreLng}
+      />
+    )}
   </>
   );
 }
-
