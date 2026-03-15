@@ -16,7 +16,7 @@ export type Crime = {
 };
 
 type CrimeMapProps = {
-  crimes: Crime[];
+  crimes?: Crime[];
   searchRadiusMetres?: number;
   searchCentreLat?: number;
   searchCentreLng?: number;
@@ -38,7 +38,7 @@ const circleOptions = {
   strokeWeight: 2,
 };
 
-export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCentreLng }: CrimeMapProps) {
+export function CrimeMap({ crimes = [], searchRadiusMetres, searchCentreLat, searchCentreLng }: CrimeMapProps) {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
@@ -48,14 +48,20 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
     if (searchCentreLat !== undefined && searchCentreLng !== undefined) {
       return { lat: searchCentreLat, lng: searchCentreLng };
     }
-    const first = crimes.find(
-      (c) => c.location?.latitude && c.location?.longitude
-    );
-    if (!first) return { lat: 51.5074, lng: -0.1278 }; // fallback: central London
-    return {
-      lat: parseFloat(first.location!.latitude),
-      lng: parseFloat(first.location!.longitude),
-    };
+    // Only attempt to find first crime if crimes array has items
+    if (crimes && crimes.length > 0) {
+      const first = crimes.find(
+        (c) => c.location?.latitude && c.location?.longitude
+      );
+      if (first) {
+        return {
+          lat: parseFloat(first.location!.latitude),
+          lng: parseFloat(first.location!.longitude),
+        };
+      }
+    }
+    // fallback: central London
+    return { lat: 51.5074, lng: -0.1278 };
   }, [crimes, searchCentreLat, searchCentreLng]);
 
   const radiusMetres = searchRadiusMetres ?? DEFAULT_RADIUS_METRES;
@@ -66,8 +72,12 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
       center={centre}
       zoom={13}
     >
-      <Circle center={centre} radius={radiusMetres} options={circleOptions} />
-      {crimes.map((crime, index) => {
+      {/* Only render the search radius circle if we have crime data */}
+      {crimes && crimes.length > 0 && (
+        <Circle center={centre} radius={radiusMetres} options={circleOptions} />
+      )}
+      {/* Render crime markers */}
+      {crimes && crimes.map((crime, index) => {
         if (!crime.location?.latitude || !crime.location?.longitude) return null;
         return (
           <Marker
