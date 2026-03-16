@@ -2,12 +2,12 @@
 import { useState } from "react";
 import { postcodeValidator } from "postcode-validator";
 import { Button } from "./Button";
-import { Crime } from "../types/crime";
+import { CrimeSearchResponse } from "../types/crime";
 
 type PostcodeInputProps = {
   Postcode?: string;
   SetPostcode?: (postcode: string) => void;
-  onCrimesLoaded: (crimes: Crime[]) => void;
+  onCrimesLoaded: (response: CrimeSearchResponse) => void;
 };
 
 export function PostcodeInput({ Postcode, SetPostcode, onCrimesLoaded }: PostcodeInputProps) {
@@ -37,7 +37,7 @@ export function PostcodeInput({ Postcode, SetPostcode, onCrimesLoaded }: Postcod
 
     const cleanedPostcode = postcode.trim().replace(/\s+/g, "");
     setError(null);
-    onCrimesLoaded([]);
+    onCrimesLoaded({ crimes: [] });
     setIsLoading(true);
 
     try {
@@ -46,7 +46,7 @@ export function PostcodeInput({ Postcode, SetPostcode, onCrimesLoaded }: Postcod
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error ?? `Request failed (${res.status})`);
       }
-      const data: Crime[] = await res.json();
+      const data: CrimeSearchResponse = await res.json();
       onCrimesLoaded(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred");

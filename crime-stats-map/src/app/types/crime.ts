@@ -24,3 +24,10 @@ export type Crime = {
   outcome_status: OutcomeStatus;
   month: string;
 };
+
+export type CrimeSearchResponse = {
+  crimes: Crime[];
+  searchRadiusMetres?: number;
+  searchCentreLat?: number;
+  searchCentreLng?: number;
+};
