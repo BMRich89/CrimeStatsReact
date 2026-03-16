@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 import { Crime } from '../types/crime';
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -54,6 +54,7 @@ const DEFAULT_ZOOM_LEVEL = 14;
 
 export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapProps) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [activeCrime, setActiveCrime] = useState<Crime | null>(null);
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -83,22 +84,57 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
     );
   };
 
+  // Pre-parse coordinates once so Markers and InfoWindow both reuse the same values
+  const crimePositions = React.useMemo(
+    () =>
+      new Map(
+        crimes.map((crime) => [
+          crime.persistent_id,
+          {
+            lat: parseFloat(crime.location.latitude),
+            lng: parseFloat(crime.location.longitude),
+          },
+        ])
+      ),
+    [crimes]
+  );
+
   return (
     <div className="flex flex-col md:flex-row gap-4 p-4">
       <div className="md:w-1/2">
         {isLoaded ? (
-          <GoogleMap mapContainerStyle={mapContainerStyle} center={center} zoom={DEFAULT_ZOOM_LEVEL}>
+          <GoogleMap
+            mapContainerStyle={mapContainerStyle}
+            center={center}
+            zoom={DEFAULT_ZOOM_LEVEL}
+            onClick={() => setActiveCrime(null)}
+          >
             {filteredCrimes.map((crime) => (
               <Marker
                 key={crime.persistent_id}
-                position={{
-                  lat: parseFloat(crime.location.latitude),
-                  lng: parseFloat(crime.location.longitude),
-                }}
+                position={crimePositions.get(crime.persistent_id)!}
                 title={crime.category}
                 icon={makePinIcon(getCategoryColor(crime.category))}
+                onClick={() => setActiveCrime(crime)}
               />
             ))}
+            {activeCrime && (
+              <InfoWindow
+                position={crimePositions.get(activeCrime.persistent_id)!}
+                onCloseClick={() => setActiveCrime(null)}
+              >
+                <div className="text-sm text-gray-900">
+                  <p className="font-semibold capitalize mb-1">
+                    {activeCrime.category.replace(/-/g, ' ')}
+                  </p>
+                  <p className="text-gray-700">{activeCrime.location.street.name}</p>
+                  <p className="text-gray-600">{activeCrime.month}</p>
+                  {activeCrime.outcome_status && (
+                    <p className="mt-1 text-gray-600">{activeCrime.outcome_status.category}</p>
+                  )}
+                </div>
+              </InfoWindow>
+            )}
           </GoogleMap>
         ) : (
           <div className="h-[500px] flex items-center justify-center bg-gray-100 rounded">
@@ -121,23 +157,30 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
-              <button
-                key={category}
-                onClick={() => toggleCategory(category)}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-sm border capitalize font-medium ${
-                  selectedCategories.includes(category)
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-900 border-gray-300'
-                }`}
-              >
-                <span
-                  className="inline-block w-3 h-3 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: getCategoryColor(category) }}
-                />
-                {category.replace(/-/g, ' ')} ({categoryCounts[category]})
-              </button>
-            ))}
+            {categories.map((category) => {
+              const isSelected = selectedCategories.includes(category);
+              return (
+                <button
+                  key={category}
+                  onClick={() => toggleCategory(category)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-sm border capitalize font-medium ${
+                    isSelected
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-900 border-gray-300'
+                  }`}
+                >
+                  <span
+                    className="inline-block w-3 h-3 rounded-full flex-shrink-0 border-2"
+                    style={
+                      isSelected
+                        ? { backgroundColor: getCategoryColor(category), borderColor: 'transparent' }
+                        : { backgroundColor: 'transparent', borderColor: getCategoryColor(category) }
+                    }
+                  />
+                  {category.replace(/-/g, ' ')} ({categoryCounts[category]})
+                </button>
+              );
+            })}
           </div>
         </div>
 
