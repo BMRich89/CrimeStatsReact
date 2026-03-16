@@ -2,14 +2,17 @@
 import React, { useState, useCallback } from "react";
 import { GoogleMap, useJsApiLoader, Circle, Marker, InfoWindow } from "@react-google-maps/api";
 import { Crime } from "../types/crime";
+export type { Crime } from "../types/crime";
 
 type CrimeMapProps = {
   crimes: Crime[];
+  searchRadiusMetres?: number;
+  searchCentreLat?: number;
+  searchCentreLng?: number;
 };
-
-const RADIUS_METRES = 1609; // ~1 mile
 const MARKER_WIDTH = 21;
 const MARKER_HEIGHT = 34;
+const DEFAULT_SEARCH_RADIUS_METRES = 1609; // ~1 mile
 
 const containerStyle = {
   width: "100%",
@@ -45,7 +48,7 @@ function buildPinUrl(colour: string): string {
   return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
 
-export function CrimeMap({ crimes }: CrimeMapProps) {
+export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCentreLng }: CrimeMapProps) {
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "",
@@ -53,8 +56,12 @@ export function CrimeMap({ crimes }: CrimeMapProps) {
 
   const [selectedCrime, setSelectedCrime] = useState<Crime | null>(null);
 
-  // Derive map centre from the first valid crime location
   const centre = React.useMemo(() => {
+    if (searchCentreLat !== undefined && searchCentreLng !== undefined) {
+      return { lat: searchCentreLat, lng: searchCentreLng };
+    }
+
+
     const first = crimes.find(
       (c) => c.location?.latitude && c.location?.longitude
     );
@@ -63,8 +70,9 @@ export function CrimeMap({ crimes }: CrimeMapProps) {
       lat: parseFloat(first.location.latitude),
       lng: parseFloat(first.location.longitude),
     };
-  }, [crimes]);
+  }, [crimes, searchCentreLat, searchCentreLng]);
 
+  const radiusMetres = searchRadiusMetres ?? DEFAULT_SEARCH_RADIUS_METRES;
   const onUnmount = useCallback(() => {
     // no-op; required by @react-google-maps/api to avoid stale map refs
   }, []);
@@ -88,10 +96,10 @@ export function CrimeMap({ crimes }: CrimeMapProps) {
         zoom={14}
         onUnmount={onUnmount}
       >
-        {/* 1-mile radius circle */}
+        {/* Search area circle */}
         <Circle
           center={centre}
-          radius={RADIUS_METRES}
+          radius={radiusMetres}
           options={{
             strokeColor: "#1d4ed8",
             strokeOpacity: 0.7,
@@ -103,9 +111,7 @@ export function CrimeMap({ crimes }: CrimeMapProps) {
 
         {/* Crime markers */}
         {crimes.map((crime, index) => {
-  console.log("Crime:", crime); // Log the crime data
   if (!crime.location?.latitude || !crime.location?.longitude) {
-    console.log("Skipping crime - missing location");
     return null;
   }
   const position = {
@@ -113,7 +119,6 @@ export function CrimeMap({ crimes }: CrimeMapProps) {
     lng: parseFloat(crime.location.longitude),
   };
   const colour = categoryColour(crime.category);
-  console.log("Rendering marker at:", position, "with colour:", colour);
   return (
     <Marker
       key={crime.persistent_id || index}

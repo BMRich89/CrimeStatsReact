@@ -1,16 +1,23 @@
 "use client"
 import { useState } from "react";
-import { Crime } from "../types/crime";
+import { CrimeSearchResponse } from "../types/crime";
 import { PostcodeInput } from "./PostcodeInput";
 import { CrimeMap } from "./CrimeMap";
 
 export function CrimePostcodeSearch() {
-  const [crimes, setCrimes] = useState<Crime[]>([]);
+  const [searchResponse, setSearchResponse] = useState<CrimeSearchResponse | null>(null);
 
   return (
     <>
-      <PostcodeInput onCrimesLoaded={setCrimes} />
-      {crimes.length > 0 && <CrimeMap crimes={crimes} />}
+      <PostcodeInput onCrimesLoaded={setSearchResponse} />
+      {searchResponse && searchResponse.crimes.length > 0 && (
+        <CrimeMap
+          crimes={searchResponse.crimes}
+          searchRadiusMetres={searchResponse.searchRadiusMetres}
+          searchCentreLat={searchResponse.searchCentreLat}
+          searchCentreLng={searchResponse.searchCentreLng}
+        />
+      )}
     </>
   );
 }

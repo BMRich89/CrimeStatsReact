@@ -1,5 +1,5 @@
-
 import { NextResponse } from 'next/server';
+import { CrimeSearchResponse } from '@/app/types/crime';
 
 // Disable TLS validation only in non-production environments (backend uses self-signed cert)
 if (process.env.NODE_ENV !== 'production') {
@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 
   try {
     const res = await fetch(
-      `${apiUrl}/CrimeByCategoryByPostcode?postcode=${encodeURIComponent(cleanedPostcode)}`
+      `${apiUrl}/CrimeByPostcode?postcode=${encodeURIComponent(cleanedPostcode)}`
     );
     if (!res.ok) {
       return NextResponse.json(
@@ -39,7 +39,16 @@ export async function GET(req: Request) {
       );
     }
     const data = await res.json();
-    return NextResponse.json(data);
+    
+    // Transform snake_case API response to camelCase for frontend
+    const transformedData: CrimeSearchResponse = {
+      crimes: data.crimes || [],
+      searchRadiusMetres: data.search_radius_metres,
+      searchCentreLat: data.search_center_lat,
+      searchCentreLng: data.search_center_lng,
+    };
+    
+    return NextResponse.json(transformedData);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: `Failed to fetch crime data: ${message}` }, { status: 502 });
