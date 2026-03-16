@@ -2,6 +2,39 @@ import React, { useState } from 'react';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 import { Crime } from '../types/crime';
 
+const CATEGORY_COLORS: Record<string, string> = {
+  'anti-social-behaviour':    '#ef4444',
+  'bicycle-theft':            '#f97316',
+  'burglary':                 '#eab308',
+  'criminal-damage-arson':    '#22c55e',
+  'drugs':                    '#14b8a6',
+  'other-crime':              '#6366f1',
+  'other-theft':              '#ec4899',
+  'possession-of-weapons':    '#dc2626',
+  'public-order':             '#f59e0b',
+  'robbery':                  '#7c3aed',
+  'shoplifting':              '#0ea5e9',
+  'theft-from-the-person':    '#84cc16',
+  'vehicle-crime':            '#06b6d4',
+  'violent-crime':            '#e11d48',
+  'violence-and-sexual-offences': '#be123c',
+};
+
+const getCategoryColor = (category: string): string =>
+  CATEGORY_COLORS[category] ?? '#6b7280';
+
+// SVG path for a 16 px-diameter circle, used as a map marker symbol
+const CIRCLE_PATH = 'M -8 0 A 8 8 0 1 0 8 0 A 8 8 0 1 0 -8 0';
+
+const makePinIcon = (color: string) => ({
+  path: CIRCLE_PATH,
+  fillColor: color,
+  fillOpacity: 1,
+  strokeColor: '#ffffff',
+  strokeWeight: 2,
+  scale: 1,
+});
+
 type CrimeMapProps = {
   crimes: Crime[];
   searchRadiusMetres?: number;
@@ -14,6 +47,11 @@ const mapContainerStyle = {
   height: '500px',
 };
 
+// Bournemouth pier – a sensible fallback centre for UK crime data
+const DEFAULT_CENTER_LAT = 50.7527;
+const DEFAULT_CENTER_LNG = -1.8683;
+const DEFAULT_ZOOM_LEVEL = 14;
+
 export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapProps) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
@@ -23,8 +61,8 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
   });
 
   const center = {
-    lat: searchCentreLat ?? 50.7527,
-    lng: searchCentreLng ?? -1.8683,
+    lat: searchCentreLat ?? DEFAULT_CENTER_LAT,
+    lng: searchCentreLng ?? DEFAULT_CENTER_LNG,
   };
 
   const categories = [...new Set(crimes.map((crime) => crime.category))];
@@ -49,7 +87,7 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
     <div className="flex flex-col md:flex-row gap-4 p-4">
       <div className="md:w-1/2">
         {isLoaded ? (
-          <GoogleMap mapContainerStyle={mapContainerStyle} center={center} zoom={14}>
+          <GoogleMap mapContainerStyle={mapContainerStyle} center={center} zoom={DEFAULT_ZOOM_LEVEL}>
             {filteredCrimes.map((crime) => (
               <Marker
                 key={crime.persistent_id}
@@ -58,6 +96,7 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
                   lng: parseFloat(crime.location.longitude),
                 }}
                 title={crime.category}
+                icon={makePinIcon(getCategoryColor(crime.category))}
               />
             ))}
           </GoogleMap>
@@ -86,12 +125,16 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
               <button
                 key={category}
                 onClick={() => toggleCategory(category)}
-                className={`px-2 py-1 rounded text-sm border capitalize ${
+                className={`flex items-center gap-1 px-2 py-1 rounded text-sm border capitalize font-medium ${
                   selectedCategories.includes(category)
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'bg-white text-gray-700 border-gray-300'
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-900 border-gray-300'
                 }`}
               >
+                <span
+                  className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: getCategoryColor(category) }}
+                />
                 {category.replace(/-/g, ' ')} ({categoryCounts[category]})
               </button>
             ))}
@@ -104,18 +147,24 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
           </h2>
           <ul className="space-y-2">
             {filteredCrimes.map((crime) => (
-              <li key={crime.persistent_id} className="p-2 border rounded bg-white">
-                <span className="font-semibold capitalize">
-                  {crime.category.replace(/-/g, ' ')}
-                </span>
-                <span className="text-sm text-gray-600 block">
-                  {crime.location.street.name} — {crime.month}
-                </span>
-                {crime.outcome_status && (
-                  <span className="text-sm text-gray-500">
-                    {crime.outcome_status.category}
+              <li key={crime.persistent_id} className="p-2 border rounded bg-white flex items-start gap-2">
+                <span
+                  className="mt-1 inline-block w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: getCategoryColor(crime.category) }}
+                />
+                <div>
+                  <span className="font-semibold capitalize text-gray-900">
+                    {crime.category.replace(/-/g, ' ')}
                   </span>
-                )}
+                  <span className="text-sm text-gray-700 block">
+                    {crime.location.street.name} — {crime.month}
+                  </span>
+                  {crime.outcome_status && (
+                    <span className="text-sm text-gray-600">
+                      {crime.outcome_status.category}
+                    </span>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
