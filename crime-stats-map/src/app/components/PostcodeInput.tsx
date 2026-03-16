@@ -47,6 +47,7 @@ export function PostcodeInput({ Postcode, SetPostcode, onCrimesLoaded }: Postcod
         throw new Error(body?.error ?? `Request failed (${res.status})`);
       }
       const data: CrimeSearchResponse = await res.json();
+
       onCrimesLoaded(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unexpected error occurred");

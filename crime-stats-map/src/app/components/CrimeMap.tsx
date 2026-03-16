@@ -60,6 +60,8 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
     if (searchCentreLat !== undefined && searchCentreLng !== undefined) {
       return { lat: searchCentreLat, lng: searchCentreLng };
     }
+
+
     const first = crimes.find(
       (c) => c.location?.latitude && c.location?.longitude
     );
@@ -71,7 +73,6 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
   }, [crimes, searchCentreLat, searchCentreLng]);
 
   const radiusMetres = searchRadiusMetres ?? DEFAULT_SEARCH_RADIUS_METRES;
-
   const onUnmount = useCallback(() => {
     // no-op; required by @react-google-maps/api to avoid stale map refs
   }, []);
