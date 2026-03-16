@@ -107,6 +107,7 @@ export function CrimeMap({
     return crimes.filter((crime) => selectedCategories.has(crime.category));
   }, [crimes, selectedCategories]);
 
+
   if (!isLoaded) {
     return (
       <div className="flex items-center justify-center h-64 bg-gray-100 rounded">

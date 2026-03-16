@@ -4,7 +4,6 @@ import { CrimeSearchResponse } from "../types/crime";
 import { PostcodeInput } from "./PostcodeInput";
 import { CrimeMap } from "./CrimeMap";
 import { CrimeList } from "./CrimeList";
-
 export function CrimePostcodeSearch() {
   const [searchResponse, setSearchResponse] =
     useState<CrimeSearchResponse | null>(null);
