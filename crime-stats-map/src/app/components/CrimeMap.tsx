@@ -73,6 +73,20 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
   }, [crimes, searchCentreLat, searchCentreLng]);
 
   const radiusMetres = searchRadiusMetres ?? DEFAULT_SEARCH_RADIUS_METRES;
+
+  const categoryCounts = React.useMemo(() =>
+    crimes.reduce<Record<string, number>>((acc, crime) => {
+      acc[crime.category] = (acc[crime.category] ?? 0) + 1;
+      return acc;
+    }, {}),
+    [crimes]
+  );
+
+  const sortedCategories = React.useMemo(() =>
+    Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]),
+    [categoryCounts]
+  );
+
   const onUnmount = useCallback(() => {
     // no-op; required by @react-google-maps/api to avoid stale map refs
   }, []);
@@ -169,21 +183,25 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
         )}
       </GoogleMap>
 
-      {/* Colour legend */}
+      {/* Colour legend with counts */}
       <div className="mt-3 flex flex-wrap gap-2">
-        {Object.entries(CATEGORY_COLOURS).map(([cat, colour]) => (
-          <span
-            key={cat}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-full border"
-            style={{ borderColor: colour, color: colour }}
-          >
+        {sortedCategories.map(([cat, count]) => {
+          const colour = categoryColour(cat);
+          return (
             <span
-              className="inline-block w-2 h-2 rounded-full"
-              style={{ backgroundColor: colour }}
-            />
-            {cat.replace(/-/g, " ")}
-          </span>
-        ))}
+              key={cat}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded-full border"
+              style={{ borderColor: colour, color: colour }}
+            >
+              <span
+                className="inline-block w-2 h-2 rounded-full"
+                style={{ backgroundColor: colour }}
+              />
+              {cat.replace(/-/g, " ")}
+              <span className="ml-1 font-semibold">{count}</span>
+            </span>
+          );
+        })}
       </div>
     </div>
   );
