@@ -86,19 +86,25 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
     );
   };
 
+  // Assign a stable key to every crime (some crimes have an empty persistent_id)
+  const crimeKeys = React.useMemo(
+    () => new Map(crimes.map((crime, index) => [crime, crime.persistent_id || `crime-${index}`])),
+    [crimes]
+  );
+
   // Pre-parse coordinates once so Markers and InfoWindow both reuse the same values
   const crimePositions = React.useMemo(
     () =>
       new Map(
         crimes.map((crime) => [
-          crime.persistent_id,
+          crimeKeys.get(crime)!,
           {
             lat: parseFloat(crime.location.latitude),
             lng: parseFloat(crime.location.longitude),
           },
         ])
       ),
-    [crimes]
+    [crimes, crimeKeys]
   );
 
   return (
@@ -113,8 +119,8 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
           >
             {filteredCrimes.map((crime) => (
               <Marker
-                key={crime.persistent_id}
-                position={crimePositions.get(crime.persistent_id)!}
+                key={crimeKeys.get(crime)}
+                position={crimePositions.get(crimeKeys.get(crime)!)!}
                 title={crime.category}
                 icon={makePinIcon(getCategoryColor(crime.category))}
                 onClick={() => setActiveCrime(crime)}
@@ -122,7 +128,7 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
             ))}
             {activeCrime && (
               <InfoWindow
-                position={crimePositions.get(activeCrime.persistent_id)!}
+                position={crimePositions.get(crimeKeys.get(activeCrime)!)!}
                 onCloseClick={() => setActiveCrime(null)}
               >
                 <div className="text-sm text-gray-900">
@@ -192,7 +198,7 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
           </h2>
           <ul className="space-y-2">
             {filteredCrimes.map((crime) => (
-              <li key={crime.persistent_id} className="p-2 border rounded bg-white flex items-start gap-2">
+              <li key={crimeKeys.get(crime)} className="p-2 border rounded bg-white flex items-start gap-2">
                 <span
                   className="mt-1 inline-block w-3 h-3 rounded-full flex-shrink-0"
                   style={{ backgroundColor: getCategoryColor(crime.category) }}
