@@ -1,0 +1,25 @@
+{
+  "name": "CrimeStatsReact",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "runArgs": ["--env-file", "${localWorkspaceFolder}/.devcontainer/devcontainer.env"],
+  "postCreateCommand": "cd crime-stats-map && npm ci",
+  "postStartCommand": "cd crime-stats-map && npm run dev",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Next.js Dev Server",
+      "onAutoForward": "openBrowser",
+      "visibility": "public"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode.vscode-typescript-next"
+      ]
+    }
+  }
+}
