@@ -79,8 +79,10 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
       : crimes;
 
   const toggleCategory = (category: string) => {
+    // Single-select: clicking an active category clears the filter;
+    // clicking any other category replaces the current selection.
     setSelectedCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
+      prev.includes(category) ? [] : [category]
     );
   };
 
