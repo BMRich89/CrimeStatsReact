@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Invalid UK postcode format' }, { status: 400 });
   }
 
-  const apiUrl = process.env.API_HOST;
+  const apiUrl = process.env.API_HOST?.replace(/\/+$/, "");
   if (!apiUrl) {
     return NextResponse.json({ error: 'API_HOST environment variable is not set' }, { status: 500 });
   }
