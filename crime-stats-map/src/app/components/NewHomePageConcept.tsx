@@ -137,7 +137,9 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "#fafafa",
   },
   featureTitle: {
-    marginBottom: "0.5rem",
+    color:'#2e2d2d',
+    fontWeight:'bold',
+    marginBottom: "0.5rem"
   },
   featureDesc: {
     color: "#555",
@@ -147,6 +149,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: "100%",
   },
   exampleBox: {
+        color:'#2e2d2d',
     padding: "1rem",
     borderRadius: "8px",
     backgroundColor: "#f5f5f5",
