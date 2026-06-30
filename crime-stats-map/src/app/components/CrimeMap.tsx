@@ -44,7 +44,7 @@ type CrimeMapProps = {
 
 const mapContainerStyle = {
   width: '100%',
-  height: '500px',
+  height: '100%',
 };
 
 // Bournemouth pier – a sensible fallback centre for UK crime data
@@ -68,8 +68,9 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
   };
 
   // Use a small latitude offset for InfoWindow positions so markers remain visible
-  const INFOWINDOW_LAT_OFFSET_SINGLE = 0.00012; // ~13m, fine-tune as needed
-  const INFOWINDOW_LAT_OFFSET_GROUP = 0.00018; // slightly larger for taller group popups
+  // Increase offsets to keep popovers clearly above pins at common zoom levels
+  const INFOWINDOW_LAT_OFFSET_SINGLE = 0.00048;
+  const INFOWINDOW_LAT_OFFSET_GROUP = 0.00072;
 
   const categories = [...new Set(crimes.map((crime) => crime.category))];
 
@@ -151,14 +152,15 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
 
   return (
     <div className="flex flex-col md:flex-row gap-4 p-4">
-      <div className="md:w-1/2">
+      <div className="md:w-3/5">
         {isLoaded ? (
+          <div className="h-[500px] md:h-[700px]">
             <GoogleMap
-            mapContainerStyle={mapContainerStyle}
-            center={center}
-            zoom={DEFAULT_ZOOM_LEVEL}
+              mapContainerStyle={mapContainerStyle}
+              center={center}
+              zoom={DEFAULT_ZOOM_LEVEL}
               onClick={() => { setActiveCrime(null); setActiveGroup(null); }}
-          >
+            >
             {groupedLocations.map((g, idx) => {
               if (g.crimes.length === 1) {
                 const crime = g.crimes[0];
@@ -219,11 +221,21 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
                   position={{ lat: pos.lat + INFOWINDOW_LAT_OFFSET_SINGLE, lng: pos.lng }}
                   onCloseClick={() => setActiveCrime(null)}
                 >
-                  <div className="text-sm text-gray-900">
-                    <p className="font-semibold capitalize mb-1">
-                      {activeCrime.category.replace(/-/g, ' ')}
-                    </p>
-                    <p className="text-gray-700">{activeCrime.location.street.name}</p>
+                  <div className="text-sm text-gray-900 max-w-xs">
+                    <div className="font-semibold capitalize mb-1 flex items-center gap-2">
+                      <span
+                        className="inline-block flex-shrink-0"
+                        style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: '9999px',
+                          backgroundColor: getCategoryColor(activeCrime.category),
+                          border: '2px solid #fff',
+                        }}
+                      />
+                      <span>{activeCrime.category.replace(/-/g, ' ')}</span>
+                    </div>
+                    <p className="text-gray-700 break-words">{activeCrime.location.street.name}</p>
                     <p className="text-gray-600">{activeCrime.month}</p>
                     {activeCrime.outcome_status && (
                       <p className="mt-1 text-gray-600">{activeCrime.outcome_status.category}</p>
@@ -240,13 +252,25 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
                   position={{ lat: lat + INFOWINDOW_LAT_OFFSET_GROUP, lng }}
                   onCloseClick={() => setActiveGroup(null)}
                 >
-                  <div className="text-sm text-gray-900">
+                  <div className="text-sm text-gray-900 max-w-xs">
                     <p className="font-semibold mb-2">{activeGroup.length} crimes at this location</p>
                     <ul className="text-xs space-y-1 max-h-48 overflow-auto">
                       {activeGroup.map((c, i) => (
-                        <li key={c.persistent_id || i} className="border-b pb-1">
-                          <div className="font-medium capitalize">{c.category.replace(/-/g, ' ')}</div>
-                          <div className="text-gray-600">{c.location.street.name} — {c.month}</div>
+                        <li key={c.persistent_id || i} className="border-b pb-1 flex items-start gap-2">
+                          <span
+                            className="mt-1 inline-block flex-shrink-0"
+                            style={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: '9999px',
+                              backgroundColor: getCategoryColor(c.category),
+                              border: '2px solid #fff',
+                            }}
+                          />
+                          <div className="break-words">
+                            <div className="font-medium capitalize">{c.category.replace(/-/g, ' ')}</div>
+                            <div className="text-gray-600">{c.location.street.name} — {c.month}</div>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -254,7 +278,8 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
                 </InfoWindow>
               );
             })()}
-          </GoogleMap>
+            </GoogleMap>
+          </div>
         ) : (
           <div className="h-[500px] flex items-center justify-center bg-gray-100 rounded">
             Loading map…
@@ -262,7 +287,7 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
         )}
       </div>
 
-      <div className="md:w-1/2 flex flex-col gap-4">
+      <div className="md:w-2/5 flex flex-col gap-4">
         <div>
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold">Categories</h2>
@@ -303,7 +328,7 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
           </div>
         </div>
 
-        <div className="overflow-y-auto max-h-[400px]">
+        <div className="overflow-y-auto max-h-[400px] md:max-h-[700px]">
           <h2 className="text-lg font-bold mb-2">
             Crime List ({filteredCrimes.length})
           </h2>
