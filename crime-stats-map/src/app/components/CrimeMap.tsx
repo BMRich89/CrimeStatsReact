@@ -26,14 +26,14 @@ const getCategoryColor = (category: string): string =>
 // SVG path for a 16 px-diameter circle, used as a map marker symbol
 const CIRCLE_PATH = 'M -8 0 A 8 8 0 1 0 8 0 A 8 8 0 1 0 -8 0';
 
-const makePinIcon = (color: string) => ({
-  path: CIRCLE_PATH,
-  fillColor: color,
-  fillOpacity: 1,
-  strokeColor: '#ffffff',
-  strokeWeight: 2,
-  scale: 1,
-});
+const makePinIcon = (color: string) => {
+  const size = 20;
+  const r = 8;
+  const cx = size / 2;
+  const cy = size / 2;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 ${size} ${size}'><circle cx='${cx}' cy='${cy}' r='${r}' fill='${color}' stroke='#ffffff' stroke-width='2'/></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
 
 type CrimeMapProps = {
   crimes: Crime[];
@@ -55,6 +55,7 @@ const DEFAULT_ZOOM_LEVEL = 14;
 export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCentreLng }: CrimeMapProps) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [activeCrime, setActiveCrime] = useState<Crime | null>(null);
+  const [activeGroup, setActiveGroup] = useState<Crime[] | null>(null);
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -65,6 +66,11 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
     lat: searchCentreLat ?? DEFAULT_CENTER_LAT,
     lng: searchCentreLng ?? DEFAULT_CENTER_LNG,
   };
+
+  // InfoWindow options (offset vertically so marker remains visible)
+  const infoWindowOptions = isLoaded && (window as any).google
+    ? { pixelOffset: new (window as any).google.maps.Size(0, -15) }
+    : undefined;
 
   const categories = [...new Set(crimes.map((crime) => crime.category))];
 
@@ -79,10 +85,9 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
       : crimes;
 
   const toggleCategory = (category: string) => {
-    // Single-select: clicking an active category clears the filter;
-    // clicking any other category replaces the current selection.
+    // Multi-select: toggle category membership in the selected list
     setSelectedCategories((prev) =>
-      prev.includes(category) ? [] : [category]
+      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     );
   };
 
@@ -107,25 +112,94 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
     [crimes, crimeKeys]
   );
 
+  // Helper: build a data URL SVG for a multi-colour pie marker
+  const makeMultiPinIcon = (categories: string[]) => {
+    const size = 28;
+    const r = 10;
+    const cx = size / 2;
+    const cy = size / 2;
+    const total = categories.length;
+    const segments = categories.map((cat, i) => {
+      const start = (i / total) * Math.PI * 2 - Math.PI / 2;
+      const end = ((i + 1) / total) * Math.PI * 2 - Math.PI / 2;
+      const x1 = cx + r * Math.cos(start);
+      const y1 = cy + r * Math.sin(start);
+      const x2 = cx + r * Math.cos(end);
+      const y2 = cy + r * Math.sin(end);
+      const large = end - start > Math.PI ? 1 : 0;
+      const color = getCategoryColor(cat);
+      return `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z" fill="${color}" stroke="#ffffff" stroke-width="0.5"/>`;
+    }).join('');
+
+    const outer = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#fff" stroke-width="1"/>`;
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}' viewBox='0 0 ${size} ${size}'>${segments}${outer}</svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  };
+
+  // Group filtered crimes by exact lat/lng (memoized at top-level to avoid conditional hooks)
+  const groupedLocations = React.useMemo(() => {
+    const groups = new Map<string, { pos: { lat: number; lng: number }; crimes: Crime[] }>();
+    for (const crime of filteredCrimes) {
+      const lat = parseFloat(crime.location.latitude);
+      const lng = parseFloat(crime.location.longitude);
+      const key = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+      const entry = groups.get(key);
+      if (entry) entry.crimes.push(crime);
+      else groups.set(key, { pos: { lat, lng }, crimes: [crime] });
+    }
+    return Array.from(groups.values());
+  }, [filteredCrimes]);
+
   return (
     <div className="flex flex-col md:flex-row gap-4 p-4">
       <div className="md:w-1/2">
         {isLoaded ? (
-          <GoogleMap
+            <GoogleMap
             mapContainerStyle={mapContainerStyle}
             center={center}
             zoom={DEFAULT_ZOOM_LEVEL}
-            onClick={() => setActiveCrime(null)}
+              onClick={() => { setActiveCrime(null); setActiveGroup(null); }}
           >
-            {filteredCrimes.map((crime) => (
-              <Marker
-                key={crimeKeys.get(crime)}
-                position={crimePositions.get(crimeKeys.get(crime)!)!}
-                title={crime.category}
-                icon={makePinIcon(getCategoryColor(crime.category))}
-                onClick={() => setActiveCrime(crime)}
-              />
-            ))}
+            {groupedLocations.map((g, idx) => {
+              if (g.crimes.length === 1) {
+                const crime = g.crimes[0];
+                return (
+                  <Marker
+                    key={crimeKeys.get(crime) ?? `crime-${idx}`}
+                    position={g.pos}
+                    title={crime.category}
+                    icon={makePinIcon(getCategoryColor(crime.category))}
+                    onClick={() => { setActiveCrime(crime); setActiveGroup(null); }}
+                  />
+                );
+              }
+
+              const cats = Array.from(new Set(g.crimes.map((c) => c.category)));
+              // If all crimes here share the same category, show a normal coloured pin
+              if (cats.length === 1) {
+                const color = getCategoryColor(cats[0]);
+                return (
+                  <Marker
+                    key={`group-${idx}-${g.crimes.length}`}
+                    position={g.pos}
+                    title={`${g.crimes.length} crimes (${cats[0].replace(/-/g, ' ')})`}
+                    icon={makePinIcon(color)}
+                    onClick={() => { setActiveGroup(g.crimes); setActiveCrime(null); }}
+                  />
+                );
+              }
+
+              const icon = makeMultiPinIcon(cats);
+              return (
+                <Marker
+                  key={`group-${idx}-${g.crimes.length}`}
+                  position={g.pos}
+                  title={`${g.crimes.length} crimes`}
+                  icon={icon}
+                  onClick={() => { setActiveGroup(g.crimes); setActiveCrime(null); }}
+                />
+              );
+            })}
             {searchRadiusMetres && (
               <Circle
                 center={center}
@@ -143,6 +217,7 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
               <InfoWindow
                 position={crimePositions.get(crimeKeys.get(activeCrime)!)!}
                 onCloseClick={() => setActiveCrime(null)}
+                options={infoWindowOptions}
               >
                 <div className="text-sm text-gray-900">
                   <p className="font-semibold capitalize mb-1">
@@ -153,6 +228,28 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
                   {activeCrime.outcome_status && (
                     <p className="mt-1 text-gray-600">{activeCrime.outcome_status.category}</p>
                   )}
+                </div>
+              </InfoWindow>
+            )}
+            {activeGroup && (
+              <InfoWindow
+                position={{
+                  lat: parseFloat(activeGroup[0].location.latitude),
+                  lng: parseFloat(activeGroup[0].location.longitude),
+                }}
+                onCloseClick={() => setActiveGroup(null)}
+                options={infoWindowOptions}
+              >
+                <div className="text-sm text-gray-900">
+                  <p className="font-semibold mb-2">{activeGroup.length} crimes at this location</p>
+                  <ul className="text-xs space-y-1 max-h-48 overflow-auto">
+                    {activeGroup.map((c, i) => (
+                      <li key={c.persistent_id || i} className="border-b pb-1">
+                        <div className="font-medium capitalize">{c.category.replace(/-/g, ' ')}</div>
+                        <div className="text-gray-600">{c.location.street.name} — {c.month}</div>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </InfoWindow>
             )}
