@@ -67,10 +67,9 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
     lng: searchCentreLng ?? DEFAULT_CENTER_LNG,
   };
 
-  // InfoWindow options (offset vertically so marker remains visible)
-  const infoWindowOptions = isLoaded && (window as any).google
-    ? { pixelOffset: new (window as any).google.maps.Size(0, -15) }
-    : undefined;
+  // Use a small latitude offset for InfoWindow positions so markers remain visible
+  const INFOWINDOW_LAT_OFFSET_SINGLE = 0.00012; // ~13m, fine-tune as needed
+  const INFOWINDOW_LAT_OFFSET_GROUP = 0.00018; // slightly larger for taller group popups
 
   const categories = [...new Set(crimes.map((crime) => crime.category))];
 
@@ -213,46 +212,48 @@ export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCe
                 }}
               />
             )}
-            {activeCrime && (
-              <InfoWindow
-                position={crimePositions.get(crimeKeys.get(activeCrime)!)!}
-                onCloseClick={() => setActiveCrime(null)}
-                options={infoWindowOptions}
-              >
-                <div className="text-sm text-gray-900">
-                  <p className="font-semibold capitalize mb-1">
-                    {activeCrime.category.replace(/-/g, ' ')}
-                  </p>
-                  <p className="text-gray-700">{activeCrime.location.street.name}</p>
-                  <p className="text-gray-600">{activeCrime.month}</p>
-                  {activeCrime.outcome_status && (
-                    <p className="mt-1 text-gray-600">{activeCrime.outcome_status.category}</p>
-                  )}
-                </div>
-              </InfoWindow>
-            )}
-            {activeGroup && (
-              <InfoWindow
-                position={{
-                  lat: parseFloat(activeGroup[0].location.latitude),
-                  lng: parseFloat(activeGroup[0].location.longitude),
-                }}
-                onCloseClick={() => setActiveGroup(null)}
-                options={infoWindowOptions}
-              >
-                <div className="text-sm text-gray-900">
-                  <p className="font-semibold mb-2">{activeGroup.length} crimes at this location</p>
-                  <ul className="text-xs space-y-1 max-h-48 overflow-auto">
-                    {activeGroup.map((c, i) => (
-                      <li key={c.persistent_id || i} className="border-b pb-1">
-                        <div className="font-medium capitalize">{c.category.replace(/-/g, ' ')}</div>
-                        <div className="text-gray-600">{c.location.street.name} — {c.month}</div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </InfoWindow>
-            )}
+            {activeCrime && (() => {
+              const pos = crimePositions.get(crimeKeys.get(activeCrime)!)!;
+              return (
+                <InfoWindow
+                  position={{ lat: pos.lat + INFOWINDOW_LAT_OFFSET_SINGLE, lng: pos.lng }}
+                  onCloseClick={() => setActiveCrime(null)}
+                >
+                  <div className="text-sm text-gray-900">
+                    <p className="font-semibold capitalize mb-1">
+                      {activeCrime.category.replace(/-/g, ' ')}
+                    </p>
+                    <p className="text-gray-700">{activeCrime.location.street.name}</p>
+                    <p className="text-gray-600">{activeCrime.month}</p>
+                    {activeCrime.outcome_status && (
+                      <p className="mt-1 text-gray-600">{activeCrime.outcome_status.category}</p>
+                    )}
+                  </div>
+                </InfoWindow>
+              );
+            })()}
+            {activeGroup && (() => {
+              const lat = parseFloat(activeGroup[0].location.latitude);
+              const lng = parseFloat(activeGroup[0].location.longitude);
+              return (
+                <InfoWindow
+                  position={{ lat: lat + INFOWINDOW_LAT_OFFSET_GROUP, lng }}
+                  onCloseClick={() => setActiveGroup(null)}
+                >
+                  <div className="text-sm text-gray-900">
+                    <p className="font-semibold mb-2">{activeGroup.length} crimes at this location</p>
+                    <ul className="text-xs space-y-1 max-h-48 overflow-auto">
+                      {activeGroup.map((c, i) => (
+                        <li key={c.persistent_id || i} className="border-b pb-1">
+                          <div className="font-medium capitalize">{c.category.replace(/-/g, ' ')}</div>
+                          <div className="text-gray-600">{c.location.street.name} — {c.month}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </InfoWindow>
+              );
+            })()}
           </GoogleMap>
         ) : (
           <div className="h-[500px] flex items-center justify-center bg-gray-100 rounded">
