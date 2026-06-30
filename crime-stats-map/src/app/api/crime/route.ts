@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 
   try {
     const res = await fetch(
-      `${apiUrl}/CrimeByPostcode?postcode=${encodeURIComponent(cleanedPostcode)}`
+      `${apiUrl}CrimeByPostcode?postcode=${encodeURIComponent(cleanedPostcode)}`
     );
     if (!res.ok) {
       return NextResponse.json(
