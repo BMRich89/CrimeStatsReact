@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow, Circle } from '@react-google-maps/api';
 import { Crime } from '../types/crime';
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -52,7 +52,7 @@ const DEFAULT_CENTER_LAT = 50.7527;
 const DEFAULT_CENTER_LNG = -1.8683;
 const DEFAULT_ZOOM_LEVEL = 14;
 
-export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapProps) {
+export function CrimeMap({ crimes, searchRadiusMetres, searchCentreLat, searchCentreLng }: CrimeMapProps) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [activeCrime, setActiveCrime] = useState<Crime | null>(null);
 
@@ -126,6 +126,19 @@ export function CrimeMap({ crimes, searchCentreLat, searchCentreLng }: CrimeMapP
                 onClick={() => setActiveCrime(crime)}
               />
             ))}
+            {searchRadiusMetres && (
+              <Circle
+                center={center}
+                radius={searchRadiusMetres}
+                options={{
+                  fillColor: '#2563eb',
+                  fillOpacity: 0.12,
+                  strokeColor: '#2563eb',
+                  strokeOpacity: 0.7,
+                  strokeWeight: 2,
+                }}
+              />
+            )}
             {activeCrime && (
               <InfoWindow
                 position={crimePositions.get(crimeKeys.get(activeCrime)!)!}
