@@ -23,14 +23,14 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Invalid UK postcode format' }, { status: 400 });
   }
 
-  const apiUrl = process.env.API_HOST?.replace(/\/+$/, "");
+  const apiUrl = process.env.API_HOST;
   if (!apiUrl) {
     return NextResponse.json({ error: 'API_HOST environment variable is not set' }, { status: 500 });
   }
 
   try {
     const res = await fetch(
-      `${apiUrl}CrimeByPostcode?postcode=${encodeURIComponent(cleanedPostcode)}`
+      `${apiUrl}/CrimeByPostcode?postcode=${encodeURIComponent(cleanedPostcode)}`
     );
     if (!res.ok) {
       return NextResponse.json(
