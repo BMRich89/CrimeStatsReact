@@ -6,7 +6,7 @@ import { CrimePostcodeSearch } from "./components/CrimePostcodeSearch";
 export default function Home() {
   return (
     <PageContainer>
-      <TitleBar title="Crime Stats Map" />
+      <TitleBar title="Postcode Health Checker" />
       <CrimePostcodeSearch />
     </PageContainer>
   );
